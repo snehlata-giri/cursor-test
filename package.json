@@ -1,0 +1,56 @@
+{
+  "name": "ai-prompt-tool",
+  "version": "1.0.0",
+  "description": "A powerful AI prompt management tool for creating, organizing, and optimizing AI prompts",
+  "main": "index.js",
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "lint": "next lint",
+    "test": "jest",
+    "test:watch": "jest --watch",
+    "deploy": "vercel --prod"
+  },
+  "keywords": [
+    "ai",
+    "prompt",
+    "management",
+    "tool",
+    "react",
+    "nextjs",
+    "typescript"
+  ],
+  "author": "Your Name",
+  "license": "MIT",
+  "dependencies": {
+    "next": "^14.0.0",
+    "react": "^18.0.0",
+    "react-dom": "^18.0.0",
+    "typescript": "^5.0.0",
+    "@types/react": "^18.0.0",
+    "@types/react-dom": "^18.0.0",
+    "@types/node": "^20.0.0",
+    "tailwindcss": "^3.3.0",
+    "autoprefixer": "^10.4.0",
+    "postcss": "^8.4.0",
+    "@heroicons/react": "^2.0.0",
+    "clsx": "^2.0.0"
+  },
+  "devDependencies": {
+    "eslint": "^8.0.0",
+    "eslint-config-next": "^14.0.0",
+    "jest": "^29.0.0",
+    "@testing-library/react": "^13.0.0",
+    "@testing-library/jest-dom": "^6.0.0",
+    "jest-environment-jsdom": "^29.0.0"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/yourusername/ai-prompt-tool.git"
+  },
+  "bugs": {
+    "url": "https://github.com/yourusername/ai-prompt-tool/issues"
+  },
+  "homepage": "https://github.com/yourusername/ai-prompt-tool#readme"
+}
