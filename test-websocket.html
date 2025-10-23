@@ -1,0 +1,61 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>WebSocket Test</title>
+</head>
+<body>
+    <h1>WebSocket Test</h1>
+    <div id="status">Connecting...</div>
+    <div id="messages"></div>
+    <button onclick="sendMessage()">Send Test Message</button>
+    
+    <script>
+        const clientId = `client_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+        const wsUrl = `ws://localhost:8000/ws/${clientId}`;
+        
+        console.log('Connecting to:', wsUrl);
+        
+        const ws = new WebSocket(wsUrl);
+        const status = document.getElementById('status');
+        const messages = document.getElementById('messages');
+        
+        ws.onopen = function(event) {
+            console.log('WebSocket connected');
+            status.textContent = 'Connected';
+            status.style.color = 'green';
+        };
+        
+        ws.onmessage = function(event) {
+            console.log('Message received:', event.data);
+            const messageDiv = document.createElement('div');
+            messageDiv.textContent = 'Received: ' + event.data;
+            messages.appendChild(messageDiv);
+        };
+        
+        ws.onclose = function(event) {
+            console.log('WebSocket closed:', event.code, event.reason);
+            status.textContent = 'Disconnected: ' + event.code + ' ' + event.reason;
+            status.style.color = 'red';
+        };
+        
+        ws.onerror = function(error) {
+            console.error('WebSocket error:', error);
+            status.textContent = 'Error';
+            status.style.color = 'red';
+        };
+        
+        function sendMessage() {
+            if (ws.readyState === WebSocket.OPEN) {
+                const message = JSON.stringify({
+                    content: 'Test message',
+                    conversation_id: null
+                });
+                ws.send(message);
+                console.log('Message sent:', message);
+            } else {
+                console.log('WebSocket not open');
+            }
+        }
+    </script>
+</body>
+</html>

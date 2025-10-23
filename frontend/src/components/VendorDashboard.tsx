@@ -1,0 +1,419 @@
+import React, { useState, useEffect } from 'react';
+import { 
+  BuildingOfficeIcon, 
+  CogIcon, 
+  CurrencyDollarIcon, 
+  ChatBubbleLeftRightIcon,
+  PlusIcon,
+  MagnifyingGlassIcon
+} from '@heroicons/react/24/outline';
+
+interface Vendor {
+  id: number;
+  name: string;
+  email: string;
+  phone: string;
+  website: string;
+  rating: number;
+  established_year: number;
+  description: string;
+}
+
+interface Service {
+  id: number;
+  vendor_id: number;
+  service_name: string;
+  category: string;
+  description: string;
+  is_active: boolean;
+  vendor_name: string;
+}
+
+interface Pricing {
+  id: number;
+  vendor_service_id: number;
+  pricing_type: string;
+  base_price: number;
+  currency: string;
+  unit: string;
+  discount_percentage: number;
+  is_active: boolean;
+  service_name: string;
+  vendor_name: string;
+}
+
+interface ChatMessage {
+  id: string;
+  type: 'user' | 'assistant';
+  content: string;
+  timestamp: string;
+  table_data?: {
+    headers: string[];
+    rows: string[][];
+  };
+}
+
+const VendorDashboard: React.FC = () => {
+  const [activeTab, setActiveTab] = useState<'vendors' | 'services' | 'pricing' | 'chat'>('vendors');
+  const [vendors, setVendors] = useState<Vendor[]>([]);
+  const [services, setServices] = useState<Service[]>([]);
+  const [pricing, setPricing] = useState<Pricing[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [searchTerm, setSearchTerm] = useState('');
+  const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
+  const [chatInput, setChatInput] = useState('');
+  const [isChatLoading, setIsChatLoading] = useState(false);
+
+  // Load data on component mount
+  useEffect(() => {
+    loadVendors();
+    loadServices();
+    loadPricing();
+  }, []);
+
+  const loadVendors = async () => {
+    setLoading(true);
+    try {
+      const response = await fetch('http://localhost:8000/api/v1/vendors');
+      if (response.ok) {
+        const data = await response.json();
+        setVendors(data);
+      }
+    } catch (error) {
+      console.error('Error loading vendors:', error);
+    }
+    setLoading(false);
+  };
+
+  const loadServices = async () => {
+    setLoading(true);
+    try {
+      const response = await fetch('http://localhost:8000/api/v1/services');
+      if (response.ok) {
+        const data = await response.json();
+        setServices(data);
+      }
+    } catch (error) {
+      console.error('Error loading services:', error);
+    }
+    setLoading(false);
+  };
+
+  const loadPricing = async () => {
+    setLoading(true);
+    try {
+      const response = await fetch('http://localhost:8000/api/v1/pricing');
+      if (response.ok) {
+        const data = await response.json();
+        setPricing(data);
+      }
+    } catch (error) {
+      console.error('Error loading pricing:', error);
+    }
+    setLoading(false);
+  };
+
+  const handleChatSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!chatInput.trim()) return;
+
+    const userMessage: ChatMessage = {
+      id: Date.now().toString(),
+      type: 'user',
+      content: chatInput,
+      timestamp: new Date().toISOString()
+    };
+
+    setChatMessages(prev => [...prev, userMessage]);
+    setChatInput('');
+    setIsChatLoading(true);
+
+    try {
+      const response = await fetch('http://localhost:8000/api/v1/chat', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          content: chatInput,
+          conversation_id: null
+        })
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        const assistantMessage: ChatMessage = {
+          id: (Date.now() + 1).toString(),
+          type: 'assistant',
+          content: data.content,
+          timestamp: new Date().toISOString(),
+          table_data: data.table_data
+        };
+        setChatMessages(prev => [...prev, assistantMessage]);
+      }
+    } catch (error) {
+      console.error('Error sending chat message:', error);
+      const errorMessage: ChatMessage = {
+        id: (Date.now() + 1).toString(),
+        type: 'assistant',
+        content: 'Sorry, I encountered an error. Please try again.',
+        timestamp: new Date().toISOString()
+      };
+      setChatMessages(prev => [...prev, errorMessage]);
+    }
+    setIsChatLoading(false);
+  };
+
+  const filteredVendors = vendors.filter(vendor =>
+    vendor.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    vendor.email.toLowerCase().includes(searchTerm.toLowerCase())
+  );
+
+  const filteredServices = services.filter(service =>
+    service.service_name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    service.category.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    service.vendor_name.toLowerCase().includes(searchTerm.toLowerCase())
+  );
+
+  const filteredPricing = pricing.filter(price =>
+    price.service_name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    price.vendor_name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    price.pricing_type.toLowerCase().includes(searchTerm.toLowerCase())
+  );
+
+  const renderTable = (headers: string[], rows: string[][]) => (
+    <div className="overflow-x-auto">
+      <table className="min-w-full divide-y divide-gray-200">
+        <thead className="bg-gray-50">
+          <tr>
+            {headers.map((header, index) => (
+              <th key={index} className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                {header}
+              </th>
+            ))}
+          </tr>
+        </thead>
+        <tbody className="bg-white divide-y divide-gray-200">
+          {rows.map((row, rowIndex) => (
+            <tr key={rowIndex} className="hover:bg-gray-50">
+              {row.map((cell, cellIndex) => (
+                <td key={cellIndex} className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                  {cell}
+                </td>
+              ))}
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+
+  return (
+    <div className="min-h-screen bg-gray-50">
+      {/* Header */}
+      <div className="bg-white shadow">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="flex justify-between items-center py-6">
+            <div>
+              <h1 className="text-3xl font-bold text-gray-900">Vendor Management System</h1>
+              <p className="mt-1 text-sm text-gray-500">Manage vendors, services, and pricing</p>
+            </div>
+            <div className="flex items-center space-x-4">
+              <div className="relative">
+                <MagnifyingGlassIcon className="h-5 w-5 absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" />
+                <input
+                  type="text"
+                  placeholder="Search..."
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                  className="pl-10 pr-4 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                />
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Navigation Tabs */}
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+        <div className="border-b border-gray-200">
+          <nav className="-mb-px flex space-x-8">
+            {[
+              { id: 'vendors', name: 'Vendors', icon: BuildingOfficeIcon },
+              { id: 'services', name: 'Services', icon: CogIcon },
+              { id: 'pricing', name: 'Pricing', icon: CurrencyDollarIcon },
+              { id: 'chat', name: 'Ask Questions', icon: ChatBubbleLeftRightIcon }
+            ].map((tab) => (
+              <button
+                key={tab.id}
+                onClick={() => setActiveTab(tab.id as any)}
+                className={`${
+                  activeTab === tab.id
+                    ? 'border-blue-500 text-blue-600'
+                    : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                } whitespace-nowrap py-2 px-1 border-b-2 font-medium text-sm flex items-center space-x-2`}
+              >
+                <tab.icon className="h-5 w-5" />
+                <span>{tab.name}</span>
+              </button>
+            ))}
+          </nav>
+        </div>
+      </div>
+
+      {/* Content */}
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        {loading && (
+          <div className="flex justify-center items-center py-12">
+            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+          </div>
+        )}
+
+        {/* Vendors Tab */}
+        {activeTab === 'vendors' && !loading && (
+          <div className="bg-white shadow rounded-lg">
+            <div className="px-6 py-4 border-b border-gray-200">
+              <h2 className="text-lg font-medium text-gray-900">Vendors ({filteredVendors.length})</h2>
+            </div>
+            <div className="overflow-hidden">
+              {renderTable(
+                ['Name', 'Email', 'Phone', 'Website', 'Rating', 'Established', 'Description'],
+                filteredVendors.map(vendor => [
+                  vendor.name,
+                  vendor.email,
+                  vendor.phone || 'N/A',
+                  vendor.website || 'N/A',
+                  `${vendor.rating}/5.0`,
+                  vendor.established_year?.toString() || 'N/A',
+                  vendor.description || 'N/A'
+                ])
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* Services Tab */}
+        {activeTab === 'services' && !loading && (
+          <div className="bg-white shadow rounded-lg">
+            <div className="px-6 py-4 border-b border-gray-200">
+              <h2 className="text-lg font-medium text-gray-900">Services ({filteredServices.length})</h2>
+            </div>
+            <div className="overflow-hidden">
+              {renderTable(
+                ['Service Name', 'Category', 'Vendor', 'Description', 'Status'],
+                filteredServices.map(service => [
+                  service.service_name,
+                  service.category,
+                  service.vendor_name,
+                  service.description || 'N/A',
+                  service.is_active ? 'Active' : 'Inactive'
+                ])
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* Pricing Tab */}
+        {activeTab === 'pricing' && !loading && (
+          <div className="bg-white shadow rounded-lg">
+            <div className="px-6 py-4 border-b border-gray-200">
+              <h2 className="text-lg font-medium text-gray-900">Pricing ({filteredPricing.length})</h2>
+            </div>
+            <div className="overflow-hidden">
+              {renderTable(
+                ['Service', 'Vendor', 'Type', 'Price', 'Currency', 'Unit', 'Discount', 'Status'],
+                filteredPricing.map(price => [
+                  price.service_name,
+                  price.vendor_name,
+                  price.pricing_type,
+                  `$${price.base_price.toFixed(2)}`,
+                  price.currency,
+                  price.unit || 'N/A',
+                  `${price.discount_percentage}%`,
+                  price.is_active ? 'Active' : 'Inactive'
+                ])
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* Chat Tab */}
+        {activeTab === 'chat' && (
+          <div className="bg-white shadow rounded-lg h-96 flex flex-col">
+            <div className="px-6 py-4 border-b border-gray-200">
+              <h2 className="text-lg font-medium text-gray-900">Ask Questions</h2>
+              <p className="text-sm text-gray-500">Ask natural language questions about vendors, services, and pricing</p>
+            </div>
+            
+            {/* Chat Messages */}
+            <div className="flex-1 overflow-y-auto p-6 space-y-4">
+              {chatMessages.length === 0 && (
+                <div className="text-center text-gray-500">
+                  <ChatBubbleLeftRightIcon className="h-12 w-12 mx-auto mb-4 text-gray-300" />
+                  <p>Start a conversation by asking a question!</p>
+                  <p className="text-sm mt-2">Try: "List all vendors" or "Show me pricing for technology services"</p>
+                </div>
+              )}
+              
+              {chatMessages.map((message) => (
+                <div key={message.id} className={`flex ${message.type === 'user' ? 'justify-end' : 'justify-start'}`}>
+                  <div className={`max-w-3xl px-4 py-2 rounded-lg ${
+                    message.type === 'user' 
+                      ? 'bg-blue-600 text-white' 
+                      : 'bg-gray-100 text-gray-900'
+                  }`}>
+                    <p className="text-sm">{message.content}</p>
+                    {message.table_data && (
+                      <div className="mt-3">
+                        {renderTable(message.table_data.headers, message.table_data.rows)}
+                      </div>
+                    )}
+                    <p className="text-xs mt-2 opacity-70">
+                      {new Date(message.timestamp).toLocaleTimeString()}
+                    </p>
+                  </div>
+                </div>
+              ))}
+              
+              {isChatLoading && (
+                <div className="flex justify-start">
+                  <div className="bg-gray-100 text-gray-900 px-4 py-2 rounded-lg">
+                    <div className="flex items-center space-x-2">
+                      <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-gray-600"></div>
+                      <span className="text-sm">Thinking...</span>
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
+            
+            {/* Chat Input */}
+            <div className="border-t border-gray-200 p-6">
+              <form onSubmit={handleChatSubmit} className="flex space-x-4">
+                <input
+                  type="text"
+                  value={chatInput}
+                  onChange={(e) => setChatInput(e.target.value)}
+                  placeholder="Ask a question about vendors, services, or pricing..."
+                  className="flex-1 px-4 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  disabled={isChatLoading}
+                />
+                <button
+                  type="submit"
+                  disabled={isChatLoading || !chatInput.trim()}
+                  className="px-6 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  Send
+                </button>
+              </form>
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+};
+
+export default VendorDashboard;
+
+

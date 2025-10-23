@@ -1,0 +1,144 @@
+services:
+  # Frontend
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    ports:
+      - "9000:3000"
+    environment:
+      - NODE_ENV=production
+    depends_on:
+      - backend
+    networks:
+      - app-network
+
+  # Backend API
+  backend:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.backend
+    ports:
+      - "8000:8000"
+    environment:
+      - ENVIRONMENT=production
+      - POSTGRES_SERVER=postgres
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=password
+      - POSTGRES_DB=multi_agent_chat
+      - REDIS_HOST=redis
+      - DGRAPH_HOST=dgraph-alpha
+      - DGRAPH_PORT=9080
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
+      - WEATHER_API_KEY=${WEATHER_API_KEY}
+      - NEWS_API_KEY=${NEWS_API_KEY}
+    depends_on:
+      - postgres
+      - redis
+      - dgraph-alpha
+    networks:
+      - app-network
+    volumes:
+      - ./backend:/app
+    command: uvicorn main:app --host 0.0.0.0 --port 8000 --reload
+
+  # PostgreSQL Database
+  postgres:
+    image: pgvector/pgvector:pg15
+    environment:
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=password
+      - POSTGRES_DB=multi_agent_chat
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./databases/init.sql:/docker-entrypoint-initdb.d/init.sql
+    networks:
+      - app-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Redis Cache
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    networks:
+      - app-network
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # RabbitMQ Message Queue
+  rabbitmq:
+    image: rabbitmq:3-management-alpine
+    ports:
+      - "5672:5672"
+      - "15672:15672"
+    environment:
+      - RABBITMQ_DEFAULT_USER=admin
+      - RABBITMQ_DEFAULT_PASS=password
+    volumes:
+      - rabbitmq_data:/var/lib/rabbitmq
+    networks:
+      - app-network
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "ping"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+
+  # Dgraph Graph Database
+  dgraph:
+    image: dgraph/dgraph:latest
+    ports:
+      - "8080:8080" # HTTP API
+      - "9080:9080" # gRPC API
+    volumes:
+      - dgraph_data:/dgraph
+    networks:
+      - app-network
+    command: dgraph zero --my=dgraph:5080 --replicas 1 --raft idx=1
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+
+  # Dgraph Alpha (Data Node)
+  dgraph-alpha:
+    image: dgraph/dgraph:latest
+    ports:
+      - "8081:8080" # HTTP API
+      - "9081:9080" # gRPC API
+    volumes:
+      - dgraph_data:/dgraph
+    networks:
+      - app-network
+    command: dgraph alpha --my=dgraph-alpha:7080 --zero=dgraph:5080
+    depends_on:
+      - dgraph
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+
+volumes:
+  postgres_data:
+  redis_data:
+  rabbitmq_data:
+  dgraph_data:
+
+networks:
+  app-network:
+    driver: bridge

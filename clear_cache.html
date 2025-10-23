@@ -1,0 +1,112 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Clear Cache - Vendor Management System</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 600px;
+            margin: 50px auto;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        .container {
+            background: white;
+            padding: 30px;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        h1 {
+            color: #333;
+            text-align: center;
+        }
+        .instructions {
+            background: #e3f2fd;
+            padding: 15px;
+            border-radius: 5px;
+            margin: 20px 0;
+        }
+        .button {
+            display: inline-block;
+            background: #2196f3;
+            color: white;
+            padding: 12px 24px;
+            text-decoration: none;
+            border-radius: 5px;
+            margin: 10px 5px;
+            transition: background 0.3s;
+        }
+        .button:hover {
+            background: #1976d2;
+        }
+        .status {
+            margin-top: 20px;
+            padding: 10px;
+            border-radius: 5px;
+            text-align: center;
+        }
+        .success {
+            background: #e8f5e8;
+            color: #2e7d32;
+            border: 1px solid #4caf50;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🔄 Cache Clear Instructions</h1>
+        
+        <div class="instructions">
+            <h3>If you're still seeing the old interface, please follow these steps:</h3>
+            <ol>
+                <li><strong>Hard Refresh:</strong> Press <kbd>Ctrl+F5</kbd> (Windows/Linux) or <kbd>Cmd+Shift+R</kbd> (Mac)</li>
+                <li><strong>Clear Browser Cache:</strong> 
+                    <ul>
+                        <li>Chrome: Settings → Privacy → Clear browsing data</li>
+                        <li>Firefox: Settings → Privacy → Clear Data</li>
+                        <li>Safari: Develop → Empty Caches</li>
+                    </ul>
+                </li>
+                <li><strong>Disable Cache (Developer Tools):</strong>
+                    <ul>
+                        <li>Open Developer Tools (F12)</li>
+                        <li>Go to Network tab</li>
+                        <li>Check "Disable cache" checkbox</li>
+                        <li>Refresh the page</li>
+                    </ul>
+                </li>
+            </ol>
+        </div>
+        
+        <div style="text-align: center;">
+            <a href="http://localhost:3000" class="button">🚀 Go to New Interface</a>
+            <a href="http://localhost:3000?t=<?php echo time(); ?>" class="button">🔄 Force Refresh</a>
+        </div>
+        
+        <div class="status success">
+            <strong>✅ New ChatGPT-style interface is ready!</strong><br>
+            You should see a modern chat interface with conversation sidebar and table results.
+        </div>
+        
+        <div style="margin-top: 20px; font-size: 14px; color: #666;">
+            <strong>What's New:</strong>
+            <ul>
+                <li>ChatGPT-style interface with conversation history</li>
+                <li>Left sidebar for managing conversations</li>
+                <li>Right panel for tabular query results</li>
+                <li>TanStack Table integration for advanced data display</li>
+                <li>Dynamic query system for complex vendor searches</li>
+            </ul>
+        </div>
+    </div>
+    
+    <script>
+        // Auto-redirect after 5 seconds
+        setTimeout(() => {
+            window.location.href = 'http://localhost:3000';
+        }, 5000);
+    </script>
+</body>
+</html>
+
+

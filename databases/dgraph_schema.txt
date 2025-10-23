@@ -1,0 +1,50 @@
+# Dgraph Schema for Vendor Management System
+
+# Vendor Node
+type Vendor {
+    id: string
+    name: string
+    email: string
+    phone: string
+    website: string
+    rating: float
+    established_year: int
+    description: string
+    has_locations: [VendorLocation]
+    provides_services: [VendorService]
+}
+
+# Vendor Location Node
+type VendorLocation {
+    id: string
+    address: string
+    city: string
+    state: string
+    country: string
+    postal_code: string
+    latitude: float
+    longitude: float
+    is_primary: bool
+    phone: string
+    email: string
+    belongs_to_vendor: Vendor
+}
+
+# Vendor Service Node
+type VendorService {
+    id: string
+    service_name: string
+    category: string
+    description: string
+    is_active: bool
+    provided_by_vendor: Vendor
+}
+
+# Relationships
+has_locations: [uid] @reverse(belongs_to_vendor)
+provides_services: [uid] @reverse(provided_by_vendor)
+belongs_to_vendor: uid @reverse(has_locations)
+provided_by_vendor: uid @reverse(provides_services)
+
+
+

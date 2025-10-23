@@ -1,0 +1,1005 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Vendor Management System</title>
+    <script src="https://unpkg.com/react@18/umd/react.development.js"></script>
+    <script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        .loading { animation: spin 1s linear infinite; }
+        @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+        .icon { width: 24px; height: 24px; display: inline-block; }
+    </style>
+</head>
+<body>
+    <div id="root"></div>
+
+    <script type="text/babel">
+        const { useState, useEffect, useMemo } = React;
+
+        // Simple icon components using Unicode symbols
+        const BuildingIcon = () => <span className="icon">🏢</span>;
+        const CogIcon = () => <span className="icon">⚙️</span>;
+        const DollarIcon = () => <span className="icon">💰</span>;
+        const ChatIcon = () => <span className="icon">💬</span>;
+        const SearchIcon = () => <span className="icon">🔍</span>;
+        const HomeIcon = () => <span className="icon">🏠</span>;
+        const MenuIcon = () => <span className="icon">☰</span>;
+
+        // Custom Data Table Component with sorting, filtering, and export
+        const DataTable = ({ headers, rows, showCopyButton = false }) => {
+            const [sortConfig, setSortConfig] = useState({ key: null, direction: 'asc' });
+            const [searchTerm, setSearchTerm] = useState('');
+            const [currentPage, setCurrentPage] = useState(1);
+            const itemsPerPage = 10;
+
+            // Copy to JSON function
+            const copyToJSON = () => {
+                const jsonData = {
+                    headers: headers,
+                    rows: filteredAndSortedData,
+                    timestamp: new Date().toISOString(),
+                    total_rows: filteredAndSortedData.length,
+                    filtered_rows: filteredAndSortedData.length,
+                    search_term: searchTerm
+                };
+                
+                const jsonString = JSON.stringify(jsonData, null, 2);
+                
+                navigator.clipboard.writeText(jsonString).then(() => {
+                    // Show a temporary success message
+                    const button = document.getElementById('datatable-copy-json-btn');
+                    if (button) {
+                        const originalText = button.textContent;
+                        button.textContent = '✓ Copied!';
+                        button.className = 'px-3 py-1 bg-green-600 text-white text-xs rounded-md hover:bg-green-700 transition-colors';
+                        setTimeout(() => {
+                            button.textContent = originalText;
+                            button.className = 'px-3 py-1 bg-blue-600 text-white text-xs rounded-md hover:bg-blue-700 transition-colors';
+                        }, 2000);
+                    }
+                }).catch(err => {
+                    console.error('Failed to copy to clipboard:', err);
+                    // Fallback: show the JSON in an alert
+                    alert('Failed to copy to clipboard. Here is the JSON data:\n\n' + jsonString);
+                });
+            };
+
+            // Export functions
+            const exportToCSV = () => {
+                const csvContent = [
+                    headers.join(','),
+                    ...filteredAndSortedData.map(row => 
+                        row.map(cell => `"${String(cell).replace(/"/g, '""')}"`).join(',')
+                    )
+                ].join('\n');
+                
+                const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+                const link = document.createElement('a');
+                const url = URL.createObjectURL(blob);
+                link.setAttribute('href', url);
+                link.setAttribute('download', `vendor_data_${new Date().toISOString().split('T')[0]}.csv`);
+                link.style.visibility = 'hidden';
+                document.body.appendChild(link);
+                link.click();
+                document.body.removeChild(link);
+            };
+
+            const exportToJSON = () => {
+                const jsonData = filteredAndSortedData.map(row => {
+                    const obj = {};
+                    headers.forEach((header, index) => {
+                        obj[header] = row[index];
+                    });
+                    return obj;
+                });
+                
+                const jsonContent = JSON.stringify(jsonData, null, 2);
+                const blob = new Blob([jsonContent], { type: 'application/json;charset=utf-8;' });
+                const link = document.createElement('a');
+                const url = URL.createObjectURL(blob);
+                link.setAttribute('href', url);
+                link.setAttribute('download', `vendor_data_${new Date().toISOString().split('T')[0]}.json`);
+                link.style.visibility = 'hidden';
+                document.body.appendChild(link);
+                link.click();
+                document.body.removeChild(link);
+            };
+
+            // Filter and sort data
+            const filteredAndSortedData = useMemo(() => {
+                let filtered = rows;
+                
+                // Apply search filter
+                if (searchTerm) {
+                    filtered = rows.filter(row => 
+                        row.some(cell => 
+                            cell.toString().toLowerCase().includes(searchTerm.toLowerCase())
+                        )
+                    );
+                }
+                
+                // Apply sorting
+                if (sortConfig.key !== null) {
+                    filtered.sort((a, b) => {
+                        const aVal = a[sortConfig.key];
+                        const bVal = b[sortConfig.key];
+                        
+                        if (aVal < bVal) {
+                            return sortConfig.direction === 'asc' ? -1 : 1;
+                        }
+                        if (aVal > bVal) {
+                            return sortConfig.direction === 'asc' ? 1 : -1;
+                        }
+                        return 0;
+                    });
+                }
+                
+                return filtered;
+            }, [rows, searchTerm, sortConfig]);
+
+            // Paginate data
+            const paginatedData = useMemo(() => {
+                const startIndex = (currentPage - 1) * itemsPerPage;
+                return filteredAndSortedData.slice(startIndex, startIndex + itemsPerPage);
+            }, [filteredAndSortedData, currentPage]);
+
+            const totalPages = Math.ceil(filteredAndSortedData.length / itemsPerPage);
+
+            const handleSort = (columnIndex) => {
+                setSortConfig(prevConfig => ({
+                    key: columnIndex,
+                    direction: prevConfig.key === columnIndex && prevConfig.direction === 'asc' ? 'desc' : 'asc'
+                }));
+            };
+
+            const SortIcon = ({ columnIndex }) => {
+                if (sortConfig.key !== columnIndex) {
+                    return <span className="text-gray-400">↕️</span>;
+                }
+                return sortConfig.direction === 'asc' ? <span>↑</span> : <span>↓</span>;
+            };
+
+            return (
+                <div className="border border-gray-200 rounded-lg overflow-hidden">
+                    {/* Search and Controls */}
+                    <div className="bg-gray-50 px-4 py-3 border-b border-gray-200">
+                        <div className="flex items-center justify-between">
+                            <div className="flex items-center space-x-4">
+                                <div className="relative">
+                                    <SearchIcon />
+                                    <input
+                                        type="text"
+                                        placeholder="Search table..."
+                                        value={searchTerm}
+                                        onChange={(e) => setSearchTerm(e.target.value)}
+                                        className="pl-8 pr-3 py-1 text-sm border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                                    />
+                                </div>
+                                <span className="text-sm text-gray-600">
+                                    {filteredAndSortedData.length} of {rows.length} rows
+                                </span>
+                                <div className="flex items-center space-x-2">
+                                    <button
+                                        onClick={exportToCSV}
+                                        className="px-3 py-1 text-sm bg-green-600 text-white rounded-md hover:bg-green-700 focus:ring-2 focus:ring-green-500 focus:ring-offset-2"
+                                        title="Export to CSV"
+                                    >
+                                        📊 CSV
+                                    </button>
+                                    <button
+                                        onClick={exportToJSON}
+                                        className="px-3 py-1 text-sm bg-blue-600 text-white rounded-md hover:bg-blue-700 focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
+                                        title="Export to JSON"
+                                    >
+                                        📄 JSON
+                                    </button>
+                                    {showCopyButton && (
+                                        <button
+                                            id="datatable-copy-json-btn"
+                                            onClick={copyToJSON}
+                                            className="px-3 py-1 text-sm bg-purple-600 text-white rounded-md hover:bg-purple-700 focus:ring-2 focus:ring-purple-500 focus:ring-offset-2"
+                                            title="Copy to clipboard as JSON"
+                                        >
+                                            📋 Copy
+                                        </button>
+                                    )}
+                                </div>
+                            </div>
+                            {totalPages > 1 && (
+                                <div className="flex items-center space-x-2">
+                                    <button
+                                        onClick={() => setCurrentPage(Math.max(1, currentPage - 1))}
+                                        disabled={currentPage === 1}
+                                        className="px-2 py-1 text-sm border border-gray-300 rounded disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-100"
+                                    >
+                                        Previous
+                                    </button>
+                                    <span className="text-sm text-gray-600">
+                                        Page {currentPage} of {totalPages}
+                                    </span>
+                                    <button
+                                        onClick={() => setCurrentPage(Math.min(totalPages, currentPage + 1))}
+                                        disabled={currentPage === totalPages}
+                                        className="px-2 py-1 text-sm border border-gray-300 rounded disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-100"
+                                    >
+                                        Next
+                                    </button>
+                                </div>
+                            )}
+                        </div>
+                    </div>
+
+                    {/* Table */}
+                    <div className="overflow-x-auto">
+                        <table className="min-w-full divide-y divide-gray-200">
+                            <thead className="bg-gray-50">
+                                <tr>
+                                    {headers.map((header, index) => (
+                                        <th
+                                            key={index}
+                                            onClick={() => handleSort(index)}
+                                            className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100 select-none"
+                                        >
+                                            <div className="flex items-center space-x-1">
+                                                <span>{header}</span>
+                                                <SortIcon columnIndex={index} />
+                                            </div>
+                                        </th>
+                                    ))}
+                                </tr>
+                            </thead>
+                            <tbody className="bg-white divide-y divide-gray-200">
+                                {paginatedData.map((row, rowIndex) => (
+                                    <tr key={rowIndex} className="hover:bg-gray-50 transition-colors">
+                                        {row.map((cell, cellIndex) => (
+                                            <td
+                                                key={cellIndex}
+                                                className="px-6 py-4 whitespace-nowrap text-sm text-gray-900"
+                                            >
+                                                {cell}
+                                            </td>
+                                        ))}
+                                    </tr>
+                                ))}
+                            </tbody>
+                        </table>
+                    </div>
+
+                    {/* Empty state */}
+                    {paginatedData.length === 0 && (
+                        <div className="text-center py-8 text-gray-500">
+                            <p>No data found</p>
+                            {searchTerm && (
+                                <button
+                                    onClick={() => setSearchTerm('')}
+                                    className="mt-2 text-blue-600 hover:text-blue-800 text-sm"
+                                >
+                                    Clear search
+                                </button>
+                            )}
+                        </div>
+                    )}
+                </div>
+            );
+        };
+
+        // Main App Component
+        const App = () => {
+            const [currentPage, setCurrentPage] = useState('home');
+            const [sidebarOpen, setSidebarOpen] = useState(false);
+
+            const navigation = [
+                { id: 'home', name: 'Dashboard', icon: HomeIcon },
+                { id: 'conversations', name: 'AI Chat', icon: ChatIcon }
+            ];
+
+            return (
+                <div className="min-h-screen bg-gray-50">
+                    {/* Sidebar */}
+                    <div className={`fixed inset-y-0 left-0 z-50 w-64 bg-white shadow-lg transform ${sidebarOpen ? 'translate-x-0' : '-translate-x-full'} transition-transform duration-300 ease-in-out lg:translate-x-0 lg:static lg:inset-0`}>
+                        <div className="flex items-center justify-center h-16 px-4 bg-blue-600">
+                            <h1 className="text-xl font-bold text-white">Vendor Management</h1>
+                        </div>
+                        <nav className="mt-8">
+                            {navigation.map((item) => (
+                                <button
+                                    key={item.id}
+                                    onClick={() => {
+                                        setCurrentPage(item.id);
+                                        setSidebarOpen(false);
+                                    }}
+                                    className={`w-full flex items-center px-6 py-3 text-left text-gray-700 hover:bg-gray-100 ${
+                                        currentPage === item.id ? 'bg-blue-50 border-r-4 border-blue-600 text-blue-600' : ''
+                                    }`}
+                                >
+                                    <item.icon />
+                                    <span className="ml-3">{item.name}</span>
+                                </button>
+                            ))}
+                        </nav>
+                    </div>
+
+                    {/* Mobile sidebar overlay */}
+                    {sidebarOpen && (
+                        <div 
+                            className="fixed inset-0 z-40 bg-gray-600 bg-opacity-75 lg:hidden"
+                            onClick={() => setSidebarOpen(false)}
+                        ></div>
+                    )}
+
+                    {/* Main content */}
+                    <div className="lg:ml-64">
+                        {/* Top bar */}
+                        <div className="bg-white shadow">
+                            <div className="flex items-center justify-between px-4 py-4">
+                                <button
+                                    onClick={() => setSidebarOpen(true)}
+                                    className="lg:hidden p-2 rounded-md text-gray-400 hover:text-gray-500 hover:bg-gray-100"
+                                >
+                                    <MenuIcon />
+                                </button>
+                                <h2 className="text-2xl font-semibold text-gray-900">
+                                    {currentPage === 'home' ? 'Dashboard' : 'AI Conversations'}
+                                </h2>
+                                <div></div>
+                            </div>
+                        </div>
+
+                        {/* Page content */}
+                        <div className="p-6">
+                            {currentPage === 'home' && <Dashboard />}
+                            {currentPage === 'conversations' && <ConversationPage />}
+                        </div>
+                    </div>
+                </div>
+            );
+        };
+
+        // Dashboard Component
+        const Dashboard = () => {
+            const [vendors, setVendors] = useState([]);
+            const [services, setServices] = useState([]);
+            const [pricing, setPricing] = useState([]);
+            const [loading, setLoading] = useState(false);
+            const [searchTerm, setSearchTerm] = useState('');
+            const [activeTab, setActiveTab] = useState('vendors');
+
+            useEffect(() => {
+                loadVendors();
+                loadServices();
+                loadPricing();
+            }, []);
+
+            const loadVendors = async () => {
+                setLoading(true);
+                try {
+                    const response = await fetch('http://localhost:8000/api/v1/vendors');
+                    if (response.ok) {
+                        const data = await response.json();
+                        setVendors(data);
+                    }
+                } catch (error) {
+                    console.error('Error loading vendors:', error);
+                }
+                setLoading(false);
+            };
+
+            const loadServices = async () => {
+                setLoading(true);
+                try {
+                    const response = await fetch('http://localhost:8000/api/v1/services');
+                    if (response.ok) {
+                        const data = await response.json();
+                        setServices(data);
+                    }
+                } catch (error) {
+                    console.error('Error loading services:', error);
+                }
+                setLoading(false);
+            };
+
+            const loadPricing = async () => {
+                setLoading(true);
+                try {
+                    const response = await fetch('http://localhost:8000/api/v1/pricing');
+                    if (response.ok) {
+                        const data = await response.json();
+                        setPricing(data);
+                    }
+                } catch (error) {
+                    console.error('Error loading pricing:', error);
+                }
+                setLoading(false);
+            };
+
+            const filteredVendors = vendors.filter(vendor =>
+                vendor.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                vendor.email.toLowerCase().includes(searchTerm.toLowerCase())
+            );
+
+            const filteredServices = services.filter(service =>
+                service.service_name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                service.category.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                service.vendor_name.toLowerCase().includes(searchTerm.toLowerCase())
+            );
+
+            const filteredPricing = pricing.filter(price =>
+                price.service_name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                price.vendor_name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                price.pricing_type.toLowerCase().includes(searchTerm.toLowerCase())
+            );
+
+            const renderTable = (headers, rows) => (
+                <div className="overflow-x-auto">
+                    <table className="min-w-full divide-y divide-gray-200">
+                        <thead className="bg-gray-50">
+                            <tr>
+                                {headers.map((header, index) => (
+                                    <th key={index} className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                        {header}
+                                    </th>
+                                ))}
+                            </tr>
+                        </thead>
+                        <tbody className="bg-white divide-y divide-gray-200">
+                            {rows.map((row, rowIndex) => (
+                                <tr key={rowIndex} className="hover:bg-gray-50">
+                                    {row.map((cell, cellIndex) => (
+                                        <td key={cellIndex} className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                                            {cell}
+                                        </td>
+                                    ))}
+                                </tr>
+                            ))}
+                        </tbody>
+                    </table>
+                </div>
+            );
+
+            return (
+                <div>
+                    {/* Search Bar */}
+                    <div className="mb-6">
+                        <div className="relative max-w-md">
+                            <SearchIcon />
+                            <input
+                                type="text"
+                                placeholder="Search vendors, services, or pricing..."
+                                value={searchTerm}
+                                onChange={(e) => setSearchTerm(e.target.value)}
+                                className="pl-10 pr-4 py-2 w-full border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                            />
+                        </div>
+                    </div>
+
+                    {/* Stats Cards */}
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+                        <div className="bg-white overflow-hidden shadow rounded-lg">
+                            <div className="p-5">
+                                <div className="flex items-center">
+                                    <div className="flex-shrink-0">
+                                        <BuildingIcon />
+                                    </div>
+                                    <div className="ml-5 w-0 flex-1">
+                                        <dl>
+                                            <dt className="text-sm font-medium text-gray-500 truncate">Total Vendors</dt>
+                                            <dd className="text-lg font-medium text-gray-900">{vendors.length}</dd>
+                                        </dl>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div className="bg-white overflow-hidden shadow rounded-lg">
+                            <div className="p-5">
+                                <div className="flex items-center">
+                                    <div className="flex-shrink-0">
+                                        <CogIcon />
+                                    </div>
+                                    <div className="ml-5 w-0 flex-1">
+                                        <dl>
+                                            <dt className="text-sm font-medium text-gray-500 truncate">Total Services</dt>
+                                            <dd className="text-lg font-medium text-gray-900">{services.length}</dd>
+                                        </dl>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div className="bg-white overflow-hidden shadow rounded-lg">
+                            <div className="p-5">
+                                <div className="flex items-center">
+                                    <div className="flex-shrink-0">
+                                        <DollarIcon />
+                                    </div>
+                                    <div className="ml-5 w-0 flex-1">
+                                        <dl>
+                                            <dt className="text-sm font-medium text-gray-500 truncate">Pricing Plans</dt>
+                                            <dd className="text-lg font-medium text-gray-900">{pricing.length}</dd>
+                                        </dl>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    {/* Tabs */}
+                    <div className="bg-white shadow rounded-lg">
+                        <div className="border-b border-gray-200">
+                            <nav className="-mb-px flex space-x-8 px-6">
+                                {[
+                                    { id: 'vendors', name: 'Vendors', icon: BuildingIcon },
+                                    { id: 'services', name: 'Services', icon: CogIcon },
+                                    { id: 'pricing', name: 'Pricing', icon: DollarIcon }
+                                ].map((tab) => (
+                                    <button
+                                        key={tab.id}
+                                        onClick={() => setActiveTab(tab.id)}
+                                        className={`${
+                                            activeTab === tab.id
+                                                ? 'border-blue-500 text-blue-600'
+                                                : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                                        } whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm flex items-center space-x-2`}
+                                    >
+                                        <tab.icon />
+                                        <span>{tab.name}</span>
+                                    </button>
+                                ))}
+                            </nav>
+                        </div>
+
+                        <div className="p-6">
+                            {loading && (
+                                <div className="flex justify-center items-center py-12">
+                                    <div className="loading rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+                                </div>
+                            )}
+
+                            {/* Vendors Tab */}
+                            {activeTab === 'vendors' && !loading && (
+                                <div>
+                                    <h3 className="text-lg font-medium text-gray-900 mb-4">Vendors ({filteredVendors.length})</h3>
+                                    {filteredVendors.length > 0 ? (
+                                        <div>
+                                            <div className="flex justify-between items-center mb-2">
+                                                <h4 className="text-sm font-medium text-gray-700">Vendor Data</h4>
+                                                <button
+                                                    onClick={() => {
+                                                        const jsonData = {
+                                                            headers: ['Name', 'Email', 'Phone', 'Website', 'Rating', 'Established', 'Description'],
+                                                            rows: filteredVendors.map(vendor => [
+                                                                vendor.name,
+                                                                vendor.email,
+                                                                vendor.phone || 'N/A',
+                                                                vendor.website || 'N/A',
+                                                                `${vendor.rating}/5.0`,
+                                                                vendor.established_year?.toString() || 'N/A',
+                                                                vendor.description || 'N/A'
+                                                            ]),
+                                                            timestamp: new Date().toISOString(),
+                                                            total_rows: filteredVendors.length
+                                                        };
+                                                        navigator.clipboard.writeText(JSON.stringify(jsonData, null, 2));
+                                                    }}
+                                                    className="px-3 py-1 bg-purple-600 text-white text-xs rounded-md hover:bg-purple-700 transition-colors"
+                                                    title="Copy vendor data as JSON"
+                                                >
+                                                    📋 Copy JSON
+                                                </button>
+                                            </div>
+                                            {renderTable(
+                                                ['Name', 'Email', 'Phone', 'Website', 'Rating', 'Established', 'Description'],
+                                                filteredVendors.map(vendor => [
+                                                    vendor.name,
+                                                    vendor.email,
+                                                    vendor.phone || 'N/A',
+                                                    vendor.website || 'N/A',
+                                                    `${vendor.rating}/5.0`,
+                                                    vendor.established_year?.toString() || 'N/A',
+                                                    vendor.description || 'N/A'
+                                                ])
+                                            )}
+                                        </div>
+                                    ) : (
+                                        <div className="text-center py-8 text-gray-500">
+                                            <BuildingIcon />
+                                            <p className="mt-2">No vendors found</p>
+                                        </div>
+                                    )}
+                                </div>
+                            )}
+
+                            {/* Services Tab */}
+                            {activeTab === 'services' && !loading && (
+                                <div>
+                                    <h3 className="text-lg font-medium text-gray-900 mb-4">Services ({filteredServices.length})</h3>
+                                    {filteredServices.length > 0 ? (
+                                        <div>
+                                            <div className="flex justify-between items-center mb-2">
+                                                <h4 className="text-sm font-medium text-gray-700">Service Data</h4>
+                                                <button
+                                                    onClick={() => {
+                                                        const jsonData = {
+                                                            headers: ['Service Name', 'Category', 'Vendor', 'Description', 'Status'],
+                                                            rows: filteredServices.map(service => [
+                                                                service.service_name,
+                                                                service.category,
+                                                                service.vendor_name,
+                                                                service.description || 'N/A',
+                                                                service.is_active ? 'Active' : 'Inactive'
+                                                            ]),
+                                                            timestamp: new Date().toISOString(),
+                                                            total_rows: filteredServices.length
+                                                        };
+                                                        navigator.clipboard.writeText(JSON.stringify(jsonData, null, 2));
+                                                    }}
+                                                    className="px-3 py-1 bg-purple-600 text-white text-xs rounded-md hover:bg-purple-700 transition-colors"
+                                                    title="Copy service data as JSON"
+                                                >
+                                                    📋 Copy JSON
+                                                </button>
+                                            </div>
+                                            {renderTable(
+                                                ['Service Name', 'Category', 'Vendor', 'Description', 'Status'],
+                                                filteredServices.map(service => [
+                                                    service.service_name,
+                                                    service.category,
+                                                    service.vendor_name,
+                                                    service.description || 'N/A',
+                                                    service.is_active ? 'Active' : 'Inactive'
+                                                ])
+                                            )}
+                                        </div>
+                                    ) : (
+                                        <div className="text-center py-8 text-gray-500">
+                                            <CogIcon />
+                                            <p className="mt-2">No services found</p>
+                                        </div>
+                                    )}
+                                </div>
+                            )}
+
+                            {/* Pricing Tab */}
+                            {activeTab === 'pricing' && !loading && (
+                                <div>
+                                    <h3 className="text-lg font-medium text-gray-900 mb-4">Pricing ({filteredPricing.length})</h3>
+                                    {filteredPricing.length > 0 ? (
+                                        <div>
+                                            <div className="flex justify-between items-center mb-2">
+                                                <h4 className="text-sm font-medium text-gray-700">Pricing Data</h4>
+                                                <button
+                                                    onClick={() => {
+                                                        const jsonData = {
+                                                            headers: ['Service', 'Vendor', 'Type', 'Price', 'Currency', 'Unit', 'Discount', 'Status'],
+                                                            rows: filteredPricing.map(price => [
+                                                                price.service_name,
+                                                                price.vendor_name,
+                                                                price.pricing_type,
+                                                                `$${price.base_price.toFixed(2)}`,
+                                                                price.currency,
+                                                                price.unit || 'N/A',
+                                                                `${price.discount_percentage}%`,
+                                                                price.is_active ? 'Active' : 'Inactive'
+                                                            ]),
+                                                            timestamp: new Date().toISOString(),
+                                                            total_rows: filteredPricing.length
+                                                        };
+                                                        navigator.clipboard.writeText(JSON.stringify(jsonData, null, 2));
+                                                    }}
+                                                    className="px-3 py-1 bg-purple-600 text-white text-xs rounded-md hover:bg-purple-700 transition-colors"
+                                                    title="Copy pricing data as JSON"
+                                                >
+                                                    📋 Copy JSON
+                                                </button>
+                                            </div>
+                                            {renderTable(
+                                                ['Service', 'Vendor', 'Type', 'Price', 'Currency', 'Unit', 'Discount', 'Status'],
+                                                filteredPricing.map(price => [
+                                                    price.service_name,
+                                                    price.vendor_name,
+                                                    price.pricing_type,
+                                                    `$${price.base_price.toFixed(2)}`,
+                                                    price.currency,
+                                                    price.unit || 'N/A',
+                                                    `${price.discount_percentage}%`,
+                                                    price.is_active ? 'Active' : 'Inactive'
+                                                ])
+                                            )}
+                                        </div>
+                                    ) : (
+                                        <div className="text-center py-8 text-gray-500">
+                                            <DollarIcon />
+                                            <p className="mt-2">No pricing found</p>
+                                        </div>
+                                    )}
+                                </div>
+                            )}
+                        </div>
+                    </div>
+                </div>
+            );
+        };
+
+        // Conversation Page Component
+        const ConversationPage = () => {
+            const [chatMessages, setChatMessages] = useState([]);
+            const [chatInput, setChatInput] = useState('');
+            const [isChatLoading, setIsChatLoading] = useState(false);
+            const [conversations, setConversations] = useState([]);
+            const [currentConversationId, setCurrentConversationId] = useState(null);
+
+            useEffect(() => {
+                loadConversations();
+            }, []);
+
+            const loadConversations = async () => {
+                try {
+                    const response = await fetch('http://localhost:8000/api/v1/conversations/');
+                    if (response.ok) {
+                        const data = await response.json();
+                        setConversations(data);
+                        if (data.length > 0 && !currentConversationId) {
+                            setCurrentConversationId(data[0].id);
+                            loadMessages(data[0].id);
+                        }
+                    }
+                } catch (error) {
+                    console.error('Error loading conversations:', error);
+                }
+            };
+
+            const loadMessages = async (conversationId) => {
+                try {
+                    const response = await fetch(`http://localhost:8000/api/v1/conversations/${conversationId}`);
+                    if (response.ok) {
+                        const data = await response.json();
+                        setChatMessages(data.messages || []);
+                    }
+                } catch (error) {
+                    console.error('Error loading messages:', error);
+                }
+            };
+
+            const handleChatSubmit = async (e) => {
+                e.preventDefault();
+                if (!chatInput.trim()) return;
+
+                const userMessage = {
+                    id: Date.now().toString(),
+                    type: 'user',
+                    content: chatInput,
+                    timestamp: new Date().toISOString()
+                };
+
+                setChatMessages(prev => [...prev, userMessage]);
+                setChatInput('');
+                setIsChatLoading(true);
+
+                try {
+                    const response = await fetch('http://localhost:8000/api/v1/chat', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ 
+                            content: chatInput, 
+                            conversation_id: currentConversationId 
+                        })
+                    });
+
+                    if (response.ok) {
+                        const data = await response.json();
+                        const assistantMessage = {
+                            id: (Date.now() + 1).toString(),
+                            type: 'assistant',
+                            content: data.content,
+                            timestamp: new Date().toISOString(),
+                            table_data: data.metadata?.table_data || data.table_data
+                        };
+                        setChatMessages(prev => [...prev, assistantMessage]);
+                        
+                        // Reload conversations to get updated list
+                        loadConversations();
+                    }
+                } catch (error) {
+                    console.error('Error sending chat message:', error);
+                    const errorMessage = {
+                        id: (Date.now() + 1).toString(),
+                        type: 'assistant',
+                        content: 'Sorry, I encountered an error. Please try again.',
+                        timestamp: new Date().toISOString()
+                    };
+                    setChatMessages(prev => [...prev, errorMessage]);
+                }
+                setIsChatLoading(false);
+            };
+
+            const startNewConversation = () => {
+                setCurrentConversationId(null);
+                setChatMessages([]);
+            };
+
+            const renderTable = (headers, rows) => {
+                const copyToJSON = () => {
+                    const jsonData = {
+                        headers: headers,
+                        rows: rows,
+                        timestamp: new Date().toISOString(),
+                        total_rows: rows.length
+                    };
+                    
+                    const jsonString = JSON.stringify(jsonData, null, 2);
+                    
+                    navigator.clipboard.writeText(jsonString).then(() => {
+                        // Show a temporary success message
+                        const button = document.getElementById('copy-json-btn');
+                        if (button) {
+                            const originalText = button.textContent;
+                            button.textContent = '✓ Copied!';
+                            button.className = 'px-3 py-1 bg-green-600 text-white text-xs rounded-md hover:bg-green-700 transition-colors';
+                            setTimeout(() => {
+                                button.textContent = originalText;
+                                button.className = 'px-3 py-1 bg-blue-600 text-white text-xs rounded-md hover:bg-blue-700 transition-colors';
+                            }, 2000);
+                        }
+                    }).catch(err => {
+                        console.error('Failed to copy to clipboard:', err);
+                        // Fallback: show the JSON in an alert
+                        alert('Failed to copy to clipboard. Here is the JSON data:\n\n' + jsonString);
+                    });
+                };
+
+                return (
+                    <div className="mt-3">
+                        <div className="flex justify-between items-center mb-2">
+                            <h4 className="text-sm font-medium text-gray-700">Query Results</h4>
+                            <button
+                                id="copy-json-btn"
+                                onClick={copyToJSON}
+                                className="px-3 py-1 bg-blue-600 text-white text-xs rounded-md hover:bg-blue-700 transition-colors"
+                                title="Copy table data as JSON"
+                            >
+                                📋 Copy JSON
+                            </button>
+                        </div>
+                        <DataTable headers={headers} rows={rows} showCopyButton={true} />
+                    </div>
+                );
+            };
+
+            return (
+                <div className="h-full flex">
+                    {/* Conversations Sidebar */}
+                    <div className="w-1/3 bg-white shadow rounded-lg mr-6">
+                        <div className="p-4 border-b border-gray-200">
+                            <div className="flex items-center justify-between">
+                                <h3 className="text-lg font-medium text-gray-900">Conversations</h3>
+                                <button
+                                    onClick={startNewConversation}
+                                    className="px-3 py-1 bg-blue-600 text-white text-sm rounded-md hover:bg-blue-700"
+                                >
+                                    New Chat
+                                </button>
+                            </div>
+                        </div>
+                        <div className="overflow-y-auto h-96">
+                            {conversations.map((conversation) => (
+                                <button
+                                    key={conversation.id}
+                                    onClick={() => {
+                                        setCurrentConversationId(conversation.id);
+                                        loadMessages(conversation.id);
+                                    }}
+                                    className={`w-full text-left p-4 border-b border-gray-200 hover:bg-gray-50 ${
+                                        currentConversationId === conversation.id ? 'bg-blue-50 border-r-4 border-blue-600' : ''
+                                    }`}
+                                >
+                                    <h4 className="font-medium text-gray-900 truncate">{conversation.title}</h4>
+                                    <p className="text-sm text-gray-500">
+                                        {new Date(conversation.updated_at).toLocaleDateString()}
+                                    </p>
+                                    <p className="text-xs text-gray-400">
+                                        {conversation.messages?.length || 0} messages
+                                    </p>
+                                </button>
+                            ))}
+                        </div>
+                    </div>
+
+                    {/* Chat Area */}
+                    <div className="flex-1 bg-white shadow rounded-lg flex flex-col">
+                        <div className="p-4 border-b border-gray-200">
+                            <h3 className="text-lg font-medium text-gray-900">
+                                {currentConversationId ? 'AI Assistant' : 'Start New Conversation'}
+                            </h3>
+                            <p className="text-sm text-gray-500">
+                                Ask questions about vendors, services, and pricing
+                            </p>
+                        </div>
+                        
+                        {/* Messages */}
+                        <div className="flex-1 overflow-y-auto p-4 space-y-4">
+                            {chatMessages.length === 0 && (
+                                <div className="text-center text-gray-500 mt-12">
+                                    <ChatIcon />
+                                    <p className="mt-2">Start a conversation by asking a question!</p>
+                                    <p className="text-sm mt-2">Try: "List all vendors" or "Show me pricing for technology services"</p>
+                                </div>
+                            )}
+                            
+                            {chatMessages.map((message) => (
+                                <div key={message.id} className={`flex ${message.type === 'user' ? 'justify-end' : 'justify-start'}`}>
+                                    <div className={`max-w-3xl px-4 py-2 rounded-lg ${
+                                        message.type === 'user' 
+                                            ? 'bg-blue-600 text-white' 
+                                            : 'bg-gray-100 text-gray-900'
+                                    }`}>
+                                        <div className="text-sm">
+                                            {message.content.split('\n').map((line, index) => {
+                                                // Skip the markdown table formatting lines
+                                                if (line.includes('|') && (line.includes('---') || line.includes('--'))) {
+                                                    return null;
+                                                }
+                                                // Skip lines that are just markdown table separators
+                                                if (line.trim() === '```' || line.trim() === '') {
+                                                    return null;
+                                                }
+                                                return <p key={index} className="mb-2">{line}</p>;
+                                            })}
+                                        </div>
+                                        {message.table_data && message.table_data.headers && message.table_data.rows && (
+                                            <div className="mt-3">
+                                                {renderTable(message.table_data.headers, message.table_data.rows)}
+                                            </div>
+                                        )}
+                                        <p className="text-xs mt-2 opacity-70">
+                                            {new Date(message.timestamp).toLocaleTimeString()}
+                                        </p>
+                                    </div>
+                                </div>
+                            ))}
+                            
+                            {isChatLoading && (
+                                <div className="flex justify-start">
+                                    <div className="bg-gray-100 text-gray-900 px-4 py-2 rounded-lg">
+                                        <div className="flex items-center space-x-2">
+                                            <div className="loading rounded-full h-4 w-4 border-b-2 border-gray-600"></div>
+                                            <span className="text-sm">AI is thinking...</span>
+                                        </div>
+                                    </div>
+                                </div>
+                            )}
+                        </div>
+                        
+                        {/* Input */}
+                        <div className="border-t border-gray-200 p-4">
+                            <form onSubmit={handleChatSubmit} className="flex space-x-4">
+                                <input
+                                    type="text"
+                                    value={chatInput}
+                                    onChange={(e) => setChatInput(e.target.value)}
+                                    placeholder="Ask a question about vendors, services, or pricing..."
+                                    className="flex-1 px-4 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                                    disabled={isChatLoading}
+                                />
+                                <button
+                                    type="submit"
+                                    disabled={isChatLoading || !chatInput.trim()}
+                                    className="px-6 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed"
+                                >
+                                    Send
+                                </button>
+                            </form>
+                        </div>
+                    </div>
+                </div>
+            );
+        };
+
+        const root = ReactDOM.createRoot(document.getElementById('root'));
+        root.render(<App />);
+    </script>
+</body>
+</html>

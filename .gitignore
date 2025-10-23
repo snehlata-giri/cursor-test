@@ -1,15 +1,3 @@
-# Dependencies
-node_modules/
-npm-debug.log*
-yarn-debug.log*
-yarn-error.log*
-
-# Production builds
-.next/
-out/
-build/
-dist/
-
 # Environment variables
 .env
 .env.local
@@ -17,25 +5,51 @@ dist/
 .env.test.local
 .env.production.local
 
-# IDE and editor files
-.vscode/
-.idea/
-*.swp
-*.swo
-*~
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
 
-# OS generated files
-.DS_Store
-.DS_Store?
-._*
-.Spotlight-V100
-.Trashes
-ehthumbs.db
-Thumbs.db
+# Virtual environments
+venv/
+env/
+ENV/
+env.bak/
+venv.bak/
 
-# Logs
-logs
-*.log
+# Node.js
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.pnpm-debug.log*
+
+# Next.js
+.next/
+out/
+build/
+
+# Production builds
+dist/
+build/
 
 # Runtime data
 pids
@@ -52,6 +66,9 @@ coverage/
 
 # Dependency directories
 jspm_packages/
+
+# TypeScript cache
+*.tsbuildinfo
 
 # Optional npm cache directory
 .npm
@@ -78,19 +95,50 @@ jspm_packages/
 .cache
 .parcel-cache
 
-# Next.js build output
-.next
+# Stores VSCode versions used for testing VSCode extensions
+.vscode-test
 
-# Nuxt.js build / generate output
-.nuxt
+# yarn v2
+.yarn/cache
+.yarn/unplugged
+.yarn/build-state.yml
+.yarn/install-state.gz
+.pnp.*
 
-# Storybook build outputs
-.out
-.storybook-out
+# IDEs
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
 
-# Temporary folders
+# OS
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# Docker
+.dockerignore
+
+# Database
+*.db
+*.sqlite
+*.sqlite3
+
+# Logs
+logs
+*.log
+
+# Docker volumes
+postgres_data/
+redis_data/
+dgraph_data/
+rabbitmq_data/
+
+# Temporary files
 tmp/
 temp/
-
-# Vercel
-.vercel

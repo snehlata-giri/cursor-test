@@ -1,0 +1,170 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>WebSocket Test</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 20px; }
+        .container { max-width: 800px; margin: 0 auto; }
+        .message { margin: 10px 0; padding: 10px; border: 1px solid #ccc; border-radius: 5px; }
+        .user { background-color: #e3f2fd; }
+        .assistant { background-color: #f3e5f5; }
+        .system { background-color: #e8f5e8; }
+        .error { background-color: #ffebee; }
+        table { width: 100%; border-collapse: collapse; margin: 10px 0; }
+        th, td { border: 1px solid #ddd; padding: 8px; text-align: left; }
+        th { background-color: #f2f2f2; }
+        input[type="text"] { width: 70%; padding: 8px; }
+        button { padding: 8px 16px; margin-left: 10px; }
+        .status { margin: 10px 0; padding: 5px; border-radius: 3px; }
+        .connected { background-color: #d4edda; color: #155724; }
+        .disconnected { background-color: #f8d7da; color: #721c24; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>WebSocket Test - Vendor Management System</h1>
+        
+        <div id="status" class="status disconnected">Disconnected</div>
+        
+        <div id="messages"></div>
+        
+        <form id="messageForm">
+            <input type="text" id="messageInput" placeholder="Ask about vendors, e.g., 'list all vendors'" autocomplete="off">
+            <button type="submit">Send</button>
+        </form>
+        
+        <button onclick="clearMessages()">Clear Messages</button>
+    </div>
+
+    <script>
+        let ws = null;
+        let clientId = `client_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+        
+        function connect() {
+            const wsUrl = `ws://localhost:8000/ws/${clientId}`;
+            console.log('Connecting to:', wsUrl);
+            
+            ws = new WebSocket(wsUrl);
+            
+            ws.onopen = function(event) {
+                console.log('WebSocket connected');
+                updateStatus('Connected', 'connected');
+            };
+            
+            ws.onmessage = function(event) {
+                console.log('Message received:', event.data);
+                const message = JSON.parse(event.data);
+                displayMessage(message);
+            };
+            
+            ws.onclose = function(event) {
+                console.log('WebSocket disconnected');
+                updateStatus('Disconnected', 'disconnected');
+                // Try to reconnect after 3 seconds
+                setTimeout(connect, 3000);
+            };
+            
+            ws.onerror = function(error) {
+                console.error('WebSocket error:', error);
+                updateStatus('Error', 'disconnected');
+            };
+        }
+        
+        function updateStatus(text, className) {
+            const status = document.getElementById('status');
+            status.textContent = text;
+            status.className = `status ${className}`;
+        }
+        
+        function displayMessage(message) {
+            const messagesDiv = document.getElementById('messages');
+            const messageDiv = document.createElement('div');
+            messageDiv.className = `message ${message.type}`;
+            
+            let content = `<strong>${message.type.toUpperCase()}</strong><br>`;
+            content += `<small>${message.timestamp}</small><br>`;
+            
+            if (message.agent_name) {
+                content += `<em>Agent: ${message.agent_name}</em><br>`;
+            }
+            
+            content += `<div>${message.content}</div>`;
+            
+            // Display table data if available
+            if (message.table_data && message.table_data.headers && message.table_data.rows) {
+                content += '<br><strong>Table Data:</strong><br>';
+                content += '<table><thead><tr>';
+                message.table_data.headers.forEach(header => {
+                    content += `<th>${header}</th>`;
+                });
+                content += '</tr></thead><tbody>';
+                message.table_data.rows.forEach(row => {
+                    content += '<tr>';
+                    row.forEach(cell => {
+                        content += `<td>${cell}</td>`;
+                    });
+                    content += '</tr>';
+                });
+                content += '</tbody></table>';
+            }
+            
+            // Display metadata table data if available
+            if (message.metadata && message.metadata.table_data && message.metadata.table_data.headers && message.metadata.table_data.rows) {
+                content += '<br><strong>Metadata Table Data:</strong><br>';
+                content += '<table><thead><tr>';
+                message.metadata.table_data.headers.forEach(header => {
+                    content += `<th>${header}</th>`;
+                });
+                content += '</tr></thead><tbody>';
+                message.metadata.table_data.rows.forEach(row => {
+                    content += '<tr>';
+                    row.forEach(cell => {
+                        content += `<td>${cell}</td>`;
+                    });
+                    content += '</tr>';
+                });
+                content += '</tbody></table>';
+            }
+            
+            messageDiv.innerHTML = content;
+            messagesDiv.appendChild(messageDiv);
+            messagesDiv.scrollTop = messagesDiv.scrollHeight;
+        }
+        
+        function sendMessage(message) {
+            if (ws && ws.readyState === WebSocket.OPEN) {
+                const messageData = {
+                    content: message,
+                    conversation_id: null
+                };
+                ws.send(JSON.stringify(messageData));
+                console.log('Message sent:', messageData);
+            } else {
+                console.error('WebSocket is not connected');
+            }
+        }
+        
+        function clearMessages() {
+            document.getElementById('messages').innerHTML = '';
+        }
+        
+        // Event listeners
+        document.getElementById('messageForm').addEventListener('submit', function(e) {
+            e.preventDefault();
+            const input = document.getElementById('messageInput');
+            const message = input.value.trim();
+            if (message) {
+                sendMessage(message);
+                input.value = '';
+            }
+        });
+        
+        // Connect when page loads
+        connect();
+    </script>
+</body>
+</html>
+
+
