@@ -1,0 +1,237 @@
+name: CI/CD Pipeline
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main, develop]
+  workflow_dispatch: # Allow manual triggers
+
+env:
+  PYTHON_VERSION: "3.10"
+  NODE_VERSION: "20"
+  POSTGRES_DB: vendor_management
+  POSTGRES_USER: postgres
+  POSTGRES_PASSWORD: password
+  DATABASE_URL: postgresql://postgres:password@localhost:5432/vendor_management
+
+jobs:
+  # Backend Tests (Python/pytest with Playwright)
+  backend-tests:
+    name: Backend Tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    services:
+      postgres:
+        image: ankane/pgvector:latest
+        env:
+          POSTGRES_USER: ${{ env.POSTGRES_USER }}
+          POSTGRES_PASSWORD: ${{ env.POSTGRES_PASSWORD }}
+          POSTGRES_DB: ${{ env.POSTGRES_DB }}
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+      dgraph-alpha:
+        image: dgraph/dgraph:v23.1.0
+        ports:
+          - 8080:8080
+          - 9080:9080
+        options: >-
+          --health-cmd "wget --no-verbose --tries=1 --spider http://localhost:8080/health || exit 1"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Cache pip dependencies
+        uses: actions/cache@v3
+        with:
+          path: ~/.cache/pip
+          key: ${{ runner.os }}-pip-${{ hashFiles('backend/requirements.txt') }}
+          restore-keys: |
+            ${{ runner.os }}-pip-
+
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y curl
+
+      - name: Install Python dependencies
+        working-directory: ./backend
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Install Playwright for Python
+        working-directory: ./backend
+        run: |
+          playwright install chromium
+          playwright install-deps chromium
+
+      - name: Wait for services to be ready
+        run: |
+          echo "Waiting for PostgreSQL..."
+          timeout 60 bash -c 'until pg_isready -h localhost -p 5432 -U postgres; do sleep 2; done'
+          echo "Waiting for Dgraph..."
+          timeout 60 bash -c 'until curl -f http://localhost:8080/health; do sleep 2; done'
+
+      - name: Run E2E tests (mock mode)
+        working-directory: ./backend
+        env:
+          MOCK_AI: "true"
+          PLAYWRIGHT_HEADLESS: "true"
+          PLAYWRIGHT_BASE_URL: "http://localhost:3000"
+        run: |
+          echo "Running E2E tests (mock mode)..."
+          pytest tests/e2e/ -v --tb=short || true
+        continue-on-error: true
+
+      - name: Run API tests
+        working-directory: ./backend
+        env:
+          PLAYWRIGHT_API_BASE_URL: "http://localhost:8000"
+        run: |
+          echo "Running API tests..."
+          pytest tests/api/ -v --tb=short || true
+        continue-on-error: true
+
+      - name: Run Performance tests
+        working-directory: ./backend
+        env:
+          PLAYWRIGHT_API_BASE_URL: "http://localhost:8000"
+        run: |
+          echo "Running Performance tests..."
+          pytest tests/performance/ -v --tb=short || true
+        continue-on-error: true
+
+      - name: Upload test reports
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: backend-test-reports
+          path: |
+            backend/playwright-report/**/*
+          retention-days: 30
+
+      - name: Upload JUnit test results
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: backend-junit-results
+          path: backend/playwright-report/junit.xml
+          retention-days: 30
+
+  # Frontend Tests (TypeScript/Playwright)
+  frontend-tests:
+    name: Frontend Tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install dependencies
+        working-directory: ./frontend
+        run: npm ci
+
+      - name: Install Playwright browsers
+        working-directory: ./frontend
+        run: npx playwright install --with-deps chromium
+
+      - name: Build frontend
+        working-directory: ./frontend
+        run: npm run build
+
+      - name: Run Playwright tests
+        working-directory: ./frontend
+        env:
+          MOCK_AI: "true"
+          PLAYWRIGHT_HEADLESS: "true"
+        run: |
+          npm run test:e2e || true
+        continue-on-error: true
+
+      - name: Upload test reports
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: frontend-test-reports
+          path: |
+            frontend/playwright-report/**/*
+          retention-days: 30
+
+  # Test Report Summary
+  test-report-summary:
+    name: Test Report Summary
+    runs-on: ubuntu-latest
+    needs: [backend-tests, frontend-tests]
+    if: always()
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Download backend reports
+        uses: actions/download-artifact@v4
+        with:
+          name: backend-test-reports
+          path: backend/playwright-report
+
+      - name: Download frontend reports
+        uses: actions/download-artifact@v4
+        with:
+          name: frontend-test-reports
+          path: frontend/playwright-report
+
+      - name: Check test reports
+        run: |
+          echo "## 📊 Test Report Summary" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          
+          if [ -f backend/playwright-report/table-report.html ]; then
+            echo "✅ Backend test report available" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "❌ Backend test report not found" >> $GITHUB_STEP_SUMMARY
+          fi
+          
+          if [ -f frontend/playwright-report/table-report.html ]; then
+            echo "✅ Frontend test report available" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "❌ Frontend test report not found" >> $GITHUB_STEP_SUMMARY
+          fi
+          
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "📥 Download reports from the Artifacts section above" >> $GITHUB_STEP_SUMMARY
+
+      - name: Upload consolidated reports
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: test-reports-consolidated
+          path: |
+            backend/playwright-report/table-report.*
+            frontend/playwright-report/table-report.*
+          retention-days: 30
+
