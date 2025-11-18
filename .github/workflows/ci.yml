@@ -74,8 +74,8 @@ jobs:
       - name: Install Playwright for Python
         working-directory: ./backend
         run: |
-          playwright install chromium
-          playwright install-deps chromium
+          python -m playwright install chromium
+          python -m playwright install-deps chromium
 
       - name: Wait for services to be ready
         run: |
