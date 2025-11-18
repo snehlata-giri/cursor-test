@@ -71,7 +71,13 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r requirements.txt
 
-      - name: Install Playwright for Python
+      - name: Verify Playwright installation
+        working-directory: ./backend
+        run: |
+          python -c "import playwright; print(f'Playwright version: {playwright.__version__}')" || echo "Playwright not found"
+          which playwright || echo "playwright command not in PATH (this is OK, using python -m)"
+
+      - name: Install Playwright browsers
         working-directory: ./backend
         run: |
           python -m playwright install chromium
